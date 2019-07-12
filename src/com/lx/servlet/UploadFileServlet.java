@@ -4,9 +4,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.RandomAccess;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
@@ -23,6 +25,8 @@ import javax.servlet.http.Part;
 @MultipartConfig
 public class UploadFileServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
+	
+	long uploadedLength = 0;
        
     /**
      * @see HttpServlet#HttpServlet()
@@ -47,12 +51,17 @@ public class UploadFileServlet extends HttpServlet {
 		// TODO Auto-generated method stub
 //		doGet(request, response);
 		
+		//设置响应数据格式和编码
+		response.setContentType("text/html;charset=utf-8");
+		
+		
 //		Enumeration<String> headerNameEnum = request.getHeaderNames();
 //		while (headerNameEnum.hasMoreElements()) {
 //			String key = headerNameEnum.nextElement();
 //			String vlaue = request.getHeader(key);
 //			System.out.println(key+":"+vlaue);
 //		}
+		
 		
 		Part part = request.getPart("file");
 //		Collection<String> headerNames = part.getHeaderNames();
@@ -79,18 +88,59 @@ public class UploadFileServlet extends HttpServlet {
 		System.out.println("filePath:"+filePath);
 		System.out.println("fileName:"+fileName);
 		
-		InputStream iStream = part.getInputStream();
-		FileOutputStream fStream = new FileOutputStream(new File(filePath,fileName));
+		long fileSize = Long.valueOf(request.getHeader("content-length"));//上传文件大小
 		
-		int uploadedLength = 0;
-		int len = 0;
-		byte[] b = new byte[1024*1024];
-		while((len=iStream.read(b)) !=-1) {
-			fStream.write(b,0,len);
-			uploadedLength = uploadedLength+len;
+		File uploadFile = new File(filePath,fileName);
+		if (uploadFile.exists()) {
+			if (uploadFile.length()<fileSize) {
+				uploadedLength = uploadFile.length();
+				System.out.println("已上传大小："+uploadedLength);
+			}else {
+				response.getWriter().write("文件存在！");
+				return;
+				
+			}
 		}
 		
-		fStream.close();
+		InputStream iStream = part.getInputStream();
+		
+		
+//		FileOutputStream fStream = new FileOutputStream(new File(filePath,fileName));
+//		int len = 0;
+//		byte[] b = new byte[1024*1024];
+//		while((len=iStream.read(b)) !=-1) {
+//			fStream.write(b,0,len);
+//			uploadedLength = uploadedLength+len;
+//		}
+//		fStream.close();
+		
+		RandomAccessFile randomAccess = new RandomAccessFile(uploadFile, "rws");
+		if (uploadedLength>0) {
+			long inputStreamSkip = iStream.skip(uploadedLength);
+			System.out.println("上传inputStreamSkip："+inputStreamSkip);
+			randomAccess.seek(uploadedLength);
+		}
+		
+		
+		boolean uploadFlag = true;
+		int len = 0;
+		byte[] b = new byte[1024*1024];
+		while(uploadFlag && (len=iStream.read(b)) !=-1) {
+			randomAccess.write(b,0,len);
+			uploadedLength = uploadedLength+len;
+			System.out.println("上传进度："+uploadedLength);
+//			response.getWriter().write("上传进度："+uploadedLength+"<br>");
+			
+//			if (uploadedLength>98148520) {
+//				randomAccess.close();
+//				iStream.close();
+//				part.delete();
+//				return;
+//			}
+		}
+		uploadedLength = 0;
+		
+		randomAccess.close();
 		iStream.close();
 		part.delete();
 	}
